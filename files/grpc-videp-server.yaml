@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: grpc-video-server  # Fixed typo in name
+  labels:
+    app: grpc-video-server  # Fixed typo in label
+spec:
+  containers:
+  - name: grpc-video-server
+    image: sadubois/grpc-video-server:1.0.1  # Fixed Docker Hub username
+    ports:
+    - containerPort: 9090
+    env:
+    - name: VIDEO_FILE_PATH
+      value: "/app/"
+    - name: VIDEO_FILE_NAME
+      value: "video.mp4"

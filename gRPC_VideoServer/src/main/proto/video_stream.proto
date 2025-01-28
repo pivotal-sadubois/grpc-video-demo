@@ -1,0 +1,18 @@
+syntax = "proto3";
+
+package videostream;
+
+option java_package = "ch.fortidemo.grpc.video";
+option java_multiple_files = true;
+
+service VideoService {
+    rpc StreamVideo (VideoRequest) returns (stream VideoChunk);
+}
+
+message VideoRequest {
+    string filename = 1;
+}
+
+message VideoChunk {
+    bytes data = 1;
+}

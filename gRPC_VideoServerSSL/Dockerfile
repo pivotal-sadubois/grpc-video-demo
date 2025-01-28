@@ -1,0 +1,15 @@
+# Step 1: Use a minimal JDK 21 image
+FROM eclipse-temurin:21-jdk-alpine
+
+# Step 2: Set the working directory in the container
+WORKDIR /app
+
+# Step 3: Copy the built JAR file (assumes you've run `mvn clean package` first)
+COPY target/grpc-video-server.jar /app/grpc-video-server.jar
+COPY video.mp4 /app
+
+# Step 4: Expose gRPC port
+EXPOSE 9090
+
+# Step 5: Run the application
+ENTRYPOINT ["java", "-jar", "/app/grpc-video-server.jar"]

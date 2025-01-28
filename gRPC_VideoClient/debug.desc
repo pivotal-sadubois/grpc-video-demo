@@ -1,0 +1,10 @@
+
+Ì
+video_stream.protovideostream"*
+VideoRequest
+filename (	Rfilename" 
+
+VideoChunk
+data (Rdata2S
+VideoServiceC
+StreamVideo.videostream.VideoRequest.videostream.VideoChunk0bproto3

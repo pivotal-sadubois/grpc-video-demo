@@ -1,0 +1,25 @@
+#!/bin/bash
+
+ARTIFACT_ID=grpc-video-server
+ARTIFACT_VERSION=1.0.0
+
+#mvn clean package
+docker buildx build --platform linux/amd64 -t grpc-video-server:1.0.0 .
+
+#docker build -t grpc-video-server:1.0.0 .
+
+. ~/.tanzu-demo-hub.cfg
+
+export TDH_REGISTRY_DOCKER_USER=sadubois
+export TDH_REGISTRY_DOCKER_PASS=000Penwin
+
+  docker login -u $TDH_REGISTRY_DOCKER_USER -p $TDH_REGISTRY_DOCKER_PASS docker.io > /dev/null 2>&1
+
+  docker tag grpc-video-server:1.0.0 sadubois/grpc-video-server:1.0.0
+echo gaga1
+  docker push sadubois/grpc-video-server:1.0.0
+echo gaga2
+
+  # Cleanup Buildfiles
+  docker builder prune -f
+

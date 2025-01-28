@@ -1,0 +1,10 @@
+FROM openjdk:21-slim
+
+ARG VERSION=7.2.0
+LABEL version=${VERSION}
+LABEL maintainer="Sacha Dubois"
+LABEL description="Sample spring boot application for k8s environment"
+
+COPY ${JAR_FILE} app.jar
+EXPOSE 9090
+ENTRYPOINT ["java","-jar","/app.jar"]

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: grpc-videp-server-svc
+spec:
+  selector:
+    app: grpc-videp-server
+  ports:
+  - name: http
+    port: 9090
+    protocol: TCP
+    targetPort: 9090
+  type: ClusterIP

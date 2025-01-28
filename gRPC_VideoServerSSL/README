@@ -1,0 +1,4 @@
+mvn spring-boot:run
+
+
+docker build -t grpc-video-server:1.0.0 .
