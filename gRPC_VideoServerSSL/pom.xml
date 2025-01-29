@@ -53,6 +53,19 @@
             <version>1.56.1</version>
         </dependency>
 
+        <!-- Exclude gRPC Census to avoid unnecessary dependencies -->
+        <dependency>
+            <groupId>io.grpc</groupId>
+            <artifactId>grpc-core</artifactId>
+            <version>1.56.1</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>io.grpc</groupId>
+                    <artifactId>grpc-census</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+
         <!-- Protobuf Compiler Plugin -->
         <dependency>
             <groupId>com.google.protobuf</groupId>
@@ -74,8 +87,13 @@
             <scope>test</scope>
         </dependency>
 
-        <!-- Spring Boot Test -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk18on</artifactId>
+            <version>1.80</version>  <!-- Adjust to latest stable version -->
+        </dependency>
 
+        <!-- Spring Boot Test -->
         <dependency>
             <groupId>org.junit.platform</groupId>
             <artifactId>junit-platform-launcher</artifactId>

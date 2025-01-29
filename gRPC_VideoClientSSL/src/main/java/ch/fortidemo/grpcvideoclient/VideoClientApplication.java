@@ -1,109 +1,151 @@
 package ch.fortidemo.grpcvideoclient;
 
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
+import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts;
+import io.grpc.netty.shaded.io.grpc.netty.NettyChannelBuilder;
 import io.grpc.stub.StreamObserver;
+import javafx.application.Application;
 import javafx.application.Platform;
-
+import javafx.scene.Scene;
+import javafx.scene.layout.StackPane;
+import javafx.scene.media.Media;
+import javafx.scene.media.MediaPlayer;
+import javafx.scene.media.MediaView;
+import javafx.stage.Stage;
 import ch.fortidemo.grpc.video.VideoServiceGrpc;
 import ch.fortidemo.grpc.video.VideoRequest;
 import ch.fortidemo.grpc.video.VideoChunk;
+import org.springframework.core.io.ClassPathResource;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.OutputStream;
+import java.io.*;
+import java.nio.file.Files;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
-public class VideoClientApplication {
+public class VideoClientApplication extends Application {
+	private static final Logger LOGGER = Logger.getLogger(VideoClientApplication.class.getName());
 	private static File tempFile;
+	private static MediaPlayer mediaPlayer;
 	private static boolean isPlaying = false;
-
-	// Default values
+	private static long totalBytesReceived = 0;
 	private static String serverAddress = "localhost";
 	private static int serverPort = 9090;
+	private static OutputStream os;
+	private static boolean isVideoReady = false;
 
 	public static void main(String[] args) {
-		System.out.println("\n🚀 [DEBUG] Starting VideoClientApplication...");
-		System.out.println("📝 [DEBUG] Received CLI arguments:");
-		for (int i = 0; i < args.length; i++) {
-			System.out.println("   🔹 Arg[" + i + "]: " + args[i]);
-		}
-
-		// Read CLI arguments
 		if (args.length >= 2) {
 			serverAddress = args[0];
 			try {
 				serverPort = Integer.parseInt(args[1]);
 			} catch (NumberFormatException e) {
-				System.err.println("❌ [ERROR] Invalid port number provided. Using default: " + serverPort);
+				LOGGER.log(Level.SEVERE, "Invalid port number. Using default: " + serverPort);
 			}
 		}
 
-		System.out.println("📡 [DEBUG] Using gRPC connection: " + serverAddress + ":" + serverPort);
-
-		System.out.println("🚀 Starting JavaFX...");
-		Platform.startup(() -> startGrpcClient());
+		LOGGER.info("🚀 Starting JavaFX application...");
+		launch(args);
 	}
 
-	private static void startGrpcClient() {
-		System.out.println("📡 Connecting to gRPC server: " + serverAddress + ":" + serverPort);
+	@Override
+	public void start(Stage primaryStage) {
+		LOGGER.info("📡 Connecting to gRPC Server: " + serverAddress + ":" + serverPort);
 
-		ManagedChannel channel = ManagedChannelBuilder.forAddress(serverAddress, serverPort)
-				.usePlaintext()
-				.build();
+		// Remove the initial empty player window issue
+		primaryStage.close();
 
-		VideoServiceGrpc.VideoServiceStub stub = VideoServiceGrpc.newStub(channel);
-		VideoRequest request = VideoRequest.newBuilder().setFilename("video.mp4").build();
+		new Thread(this::startGrpcClient).start();
+	}
 
+	private void startGrpcClient() {
 		try {
-			tempFile = File.createTempFile("video", ".mp4");
-			System.out.println("📥 Downloading video to: " + tempFile.getAbsolutePath());
+			ClassPathResource trustCertResource = new ClassPathResource("certs/ca.crt");
+			InputStream trustCertStream = trustCertResource.getInputStream();
+			LOGGER.info("✅ TLS Certificate loaded successfully.");
 
-			OutputStream os = new FileOutputStream(tempFile);
+			ManagedChannel channel = NettyChannelBuilder.forAddress(serverAddress, serverPort)
+					.overrideAuthority("grpc-video-server-local")
+					.sslContext(GrpcSslContexts.forClient().trustManager(trustCertStream).build())
+					.build();
+
+			VideoServiceGrpc.VideoServiceStub stub = VideoServiceGrpc.newStub(channel);
+			VideoRequest request = VideoRequest.newBuilder().setFilename("video.mp4").build();
+
+			tempFile = Files.createTempFile("streaming-video", ".mp4").toFile();
+			LOGGER.info("📥 Downloading video to: " + tempFile.getAbsolutePath());
+
+			os = new BufferedOutputStream(new FileOutputStream(tempFile), 10 * 1024 * 1024); // 10MB buffer
 
 			stub.streamVideo(request, new StreamObserver<VideoChunk>() {
-				private long totalBytesReceived = 0;
-
 				@Override
 				public void onNext(VideoChunk chunk) {
 					try {
-						os.write(chunk.getData().toByteArray());
-						totalBytesReceived += chunk.getData().size();
-						System.out.printf("📦 [DEBUG] Received chunk: %d bytes (%.2f MB total)\n",
-								chunk.getData().size(), totalBytesReceived / (1024.0 * 1024.0));
+						byte[] data = chunk.getData().toByteArray();
+						os.write(data);
+						os.flush();
+						totalBytesReceived += data.length;
 
-						// Start playing once we receive the first chunk
-						if (!isPlaying && totalBytesReceived > 1024 * 1024) { // Start playback after ~1MB
+						// Start playback after 10MB is received
+						if (!isPlaying && totalBytesReceived >= 10 * 1024 * 1024) {
 							isPlaying = true;
-							Platform.runLater(() -> VideoClient.playVideo(tempFile));
+							isVideoReady = true;
+							Platform.runLater(() -> playVideo(tempFile));
 						}
-					} catch (Exception e) {
-						System.err.println("❌ [ERROR] Error writing chunk: " + e.getMessage());
-						e.printStackTrace();
+					} catch (IOException e) {
+						LOGGER.log(Level.SEVERE, "Error writing video chunk", e);
 					}
 				}
 
 				@Override
 				public void onError(Throwable t) {
-					System.err.println("❌ [ERROR] gRPC Connection Error: " + t.getMessage());
-					t.printStackTrace();
+					LOGGER.log(Level.SEVERE, "❌ gRPC Connection Error: " + t.getMessage(), t);
 				}
 
 				@Override
 				public void onCompleted() {
 					try {
 						os.close();
-						System.out.println("✅ [DEBUG] Video download complete!");
+						LOGGER.info("✅ Video download complete!");
 						channel.shutdown();
-					} catch (Exception e) {
-						System.err.println("❌ [ERROR] Error closing output stream: " + e.getMessage());
-						e.printStackTrace();
+					} catch (IOException e) {
+						LOGGER.log(Level.SEVERE, "Error closing stream", e);
 					}
 				}
 			});
 
 		} catch (Exception e) {
-			System.err.println("❌ [ERROR] Exception in gRPC client: " + e.getMessage());
-			e.printStackTrace();
+			LOGGER.log(Level.SEVERE, "❌ Exception in gRPC client", e);
 		}
+	}
+
+	private void playVideo(File videoFile) {
+		if (!isVideoReady) {
+			LOGGER.warning("🚨 Video is not ready yet! Waiting for more data...");
+			return;
+		}
+
+		Platform.runLater(() -> {
+			try {
+				LOGGER.info("🎬 Starting playback of: " + videoFile.getAbsolutePath());
+
+				Media media = new Media(videoFile.toURI().toString());
+				mediaPlayer = new MediaPlayer(media);
+				MediaView mediaView = new MediaView(mediaPlayer);
+
+				StackPane root = new StackPane();
+				root.getChildren().add(mediaView);
+
+				Scene scene = new Scene(root, 800, 600);
+				Stage stage = new Stage();
+				stage.setTitle("gRPC Video Player");
+				stage.setScene(scene);
+				stage.show();
+
+				mediaPlayer.play();
+				LOGGER.info("▶ Video playback started...");
+			} catch (Exception e) {
+				LOGGER.log(Level.SEVERE, "❌ Video playback error", e);
+			}
+		});
 	}
 }

@@ -1,2 +1,6 @@
 *.mp4
 videos/
+certs/
+*.key
+*.crt
+*.pem
